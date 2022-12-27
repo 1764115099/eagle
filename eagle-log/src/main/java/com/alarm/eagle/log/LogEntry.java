@@ -71,8 +71,8 @@ public class LogEntry implements Serializable {
         if (json.has("@timestamp")) {
             atTimestamp = DateUtil.toAtTimestampWithZone(json.get("@timestamp").getAsString());
         }
-        if (json.has("source")) {
-            path = json.get("source").getAsString();
+        if (json.has("path")) {
+            path = json.get("path").getAsString();
         }
         if (json.has("timestamp")) {
             timestamp = DateUtil.toAtTimestampWithZone(json.get("timestamp").getAsString());

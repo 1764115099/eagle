@@ -24,14 +24,15 @@ public class RuleSourceFunction extends RichSourceFunction<RuleBase> {
     public void run(SourceContext sourceContext) throws Exception {
         while (isRunning) {
             logger.info("Http to get rules from " + ruleUrl);
-//            String content = HttpUtil.doGet(ruleUrl);
-            String content = HttpUtil.doGetMock(ruleUrl);
+            String content = HttpUtil.doGet(ruleUrl);
+//            String content = HttpUtil.doGetMock(ruleUrl);
             if (content == null) {
                 logger.error("Failed to get rules from url {}", ruleUrl);
                 return;
             }
 
-            JsonArray resJson = JsonParser.parseString(content).getAsJsonArray();
+//            JsonArray resJson = JsonParser.parseString(content).getAsJsonArray();
+            JsonArray resJson = JsonParser.parseString(content).getAsJsonObject().getAsJsonArray("data");
             if (resJson == null) {
                 logger.error("Failed to parse json:{}", content);
                 return;

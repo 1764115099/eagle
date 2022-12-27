@@ -45,7 +45,7 @@ public class LogProcessFunction extends BroadcastProcessFunction<LogEntry, RuleB
             List<LogEntry> result = logProcessor.execute(logEntry);
             for (LogEntry item : result) {
                 if (item.isWrongLog()) {
-                    logger.warn("Error log, index:{}", item.getIndex());
+                    logger.warn("Error log, index:{}, json:{}", item.getIndex(),item.getJsonStr());
                     item.handleError();
                     collector.collect(item);
                 } else {

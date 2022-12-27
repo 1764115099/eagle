@@ -63,7 +63,7 @@ public class LogProcessorWithRules implements LogProcessor {
         List<LogEntry> result = new LinkedList<>();
         try {
             if (kieSession != null) {
-                kieSession.setGlobal("LOG", logger);
+//                kieSession.setGlobal("LOG", logger);
                 kieSession.insert(entry);
                 kieSession.fireAllRules();
                 for (Object obj : kieSession.getObjects()) {

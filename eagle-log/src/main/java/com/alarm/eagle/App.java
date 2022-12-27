@@ -4,14 +4,16 @@ import com.alarm.eagle.config.ConfigConstant;
 import com.alarm.eagle.config.EagleProperties;
 import com.alarm.eagle.es.ElasticsearchUtil;
 import com.alarm.eagle.es.EsActionRequestFailureHandler;
-import com.alarm.eagle.es.EsSinkFunction;
+//import com.alarm.eagle.es.EsSinkFunction;
+import com.alarm.eagle.es.EsSinkFunction2;
 import com.alarm.eagle.log.*;
 import com.alarm.eagle.redis.*;
 import com.alarm.eagle.rule.RuleBase;
 import com.alarm.eagle.rule.RuleSourceFunction;
-import com.alarm.eagle.util.HttpUtil;
+import com.alarm.eagle.util.*;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonParser;
+import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.configuration.Configuration;
@@ -28,9 +30,7 @@ import org.apache.http.HttpHost;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 
 /**
  * Created by luxiaoxun on 2020/01/27.
@@ -47,13 +47,67 @@ public class App {
             // Build stream DAG
             StreamExecutionEnvironment env = getStreamExecutionEnvironment(parameter);
             DataStream<LogEntry> dataSource = getKafkaDataSource(parameter, env);
-            BroadcastStream<RuleBase> ruleSource = getRuleDataSource(parameter, env);
-            SingleOutputStreamOperator<LogEntry> processedStream = processLogStream(parameter, dataSource, ruleSource);
-            sinkToRedis(parameter, processedStream);
-            sinkToElasticsearch(parameter, processedStream);
 
-            DataStream<LogEntry> kafkaOutputStream = processedStream.getSideOutput(Descriptors.kafkaOutputTag);
-            sinkLogToKafka(parameter, kafkaOutputStream);
+            /*
+                转换流数据类型，将原有eagle数据流程中的logEntry实体类中的message（即实际rasp日志部分）部分做反序列化，供后续处理使用
+             */
+            SingleOutputStreamOperator<Message> messageStream = dataSource.map(new MapFunction<LogEntry, Message>() {
+
+                @Override
+                public Message map(LogEntry logEntry) throws Exception {
+                    /*
+                        Message: 2022-12-21 16:19:05,606 INFO  [http-nio-8080-exec-6][com.baidu.openrasp.plugin.js.log] http://112.124.65.22:31875/vulns/012-jdbc-mysql.jsp [eagle-logger] ;;"timestamp":"2022-12-21T08:19:05.606Z","atTimestamp":"2022-12-21T08:19:05.606Z","id":"9y8em64ycv400","requestpath":"/vulns/012-jdbc-mysql.jsp","querystring":"id=1","requestmethod":"get","requestprotocol":"http/1.1","remoteaddr":"10.0.18.237","sqlserver":"mysql","sql":"SELECT * FROM vuln WHERE id = 1";;
+                        根据事先在日志中预留的分隔符 “;;”，切割出有用的数据，便于反序列化
+                     */
+                    String[] values = logEntry.getMessage().split(";;");
+                    String jsonString = "{" + values[1] + "}";
+                    Message message = JsonUtil.jsonToObject(jsonString, Message.class);
+                    return message;
+                }
+                private static final long serialVersionUID = -6867736771747690202L;
+            });
+
+            /*
+                利用process批量处理逻辑，还需完善
+             */
+//            messageStream.keyBy(message -> message.getId())
+//                    .process(new AggregateMessage())
+//                    .print();
+
+
+            /*
+                根据url做基于时间窗口的聚合操作，一次仅根据keyBy做一种聚合
+             */
+            SingleOutputStreamOperator<MessageCount> urlAggregate = messageStream.keyBy(message -> message.getUrl())
+                    .timeWindow(Time.seconds(30))
+                    .aggregate(new CountAggregateMessage());
+            urlAggregate.print();
+
+
+           /*
+                创建实体类聚合例子和sink例子，所有sink操作需要根据具体实体类，替换方法类型
+            */
+//           SingleOutputStreamOperator<ResultMap> resultmap = dataSource.keyBy(logEntry -> logEntry.getIp())
+//                    .timeWindow(Time.milliseconds(10))
+//                    .aggregate(new CountAggregate())
+//                    .setParallelism(1).name("ipReuslt").uid("ipReuslt");
+//            resultmap.print();
+//            sinkToRedis(parameter, resultmap);
+//            sinkToElasticsearch(parameter, resultmap);
+//            DataStream<ResultMap> kafkaOutputStream = resultmap.getSideOutput(Descriptors.kafkaOutputTag2);
+//            sinkLogToKafka(parameter, resultmap);
+
+
+            /*
+                旧有drools逻辑
+             */
+//            BroadcastStream<RuleBase> ruleSource = getRuleDataSource(parameter, env);
+//            SingleOutputStreamOperator<LogEntry> processedStream = processLogStream(parameter, dataSource, ruleSource);
+//            sinkToRedis(parameter, processedStream);
+//            sinkToElasticsearch(parameter, processedStream);
+
+//            DataStream<LogEntry> kafkaOutputStream2 = processedStream.getSideOutput(Descriptors.kafkaOutputTag);
+//            sinkLogToKafka(parameter, kafkaOutputStream);
 
             env.getConfig().setGlobalJobParameters(parameter);
             env.execute("eagle-log");
@@ -76,10 +130,10 @@ public class App {
         //checkpoint
         boolean enableCheckpoint = parameter.getBoolean(ConfigConstant.FLINK_ENABLE_CHECKPOINT, false);
         if (enableCheckpoint) {
-            env.enableCheckpointing(60000L);
+            env.enableCheckpointing(120000L);
             CheckpointConfig config = env.getCheckpointConfig();
             config.setMinPauseBetweenCheckpoints(30000L);
-            config.setCheckpointTimeout(10000L);
+            config.setCheckpointTimeout(120000L);
             //RETAIN_ON_CANCELLATION则在job cancel的时候会保留externalized checkpoint state
             config.enableExternalizedCheckpoints(CheckpointConfig.ExternalizedCheckpointCleanup.DELETE_ON_CANCELLATION);
         }
@@ -126,14 +180,15 @@ public class App {
 
     private static RuleBase getInitRuleBase(ParameterTool parameter) {
         String ruleUrl = parameter.get(ConfigConstant.STREAM_RULE_URL);
-//        String content = HttpUtil.doGet(ruleUrl);
-        String content = HttpUtil.doGetMock(ruleUrl);
+        String content = HttpUtil.doGet(ruleUrl);
+//        String content = HttpUtil.doGetMock(ruleUrl);
         if (content == null) {
             logger.error("Failed to get rules from url {}", ruleUrl);
             return null;
         }
 
-        JsonArray resJson = JsonParser.parseString(content).getAsJsonArray();
+//        JsonArray resJson = JsonParser.parseString(content).getAsJsonArray();
+        JsonArray resJson = JsonParser.parseString(content).getAsJsonObject().getAsJsonArray("data");
         if (resJson == null) {
             logger.error("Failed to parse json:{}", content);
             return null;
@@ -143,18 +198,18 @@ public class App {
         return ruleBase;
     }
 
-    private static void sinkLogToKafka(ParameterTool parameter, DataStream<LogEntry> stream) {
+    private static void sinkLogToKafka(ParameterTool parameter, DataStream<ResultMap> stream) {
         String kafkaBootstrapServers = parameter.get(ConfigConstant.KAFKA_SINK_BOOTSTRAP_SERVERS);
         String kafkaTopic = parameter.get(ConfigConstant.KAFKA_SINK_TOPIC);
         int kafkaParallelism = parameter.getInt(ConfigConstant.KAFKA_SINK_TOPIC_PARALLELISM);
         String name = "kafka-sink";
-        FlinkKafkaProducer<LogEntry> producer = new FlinkKafkaProducer<>(kafkaBootstrapServers, kafkaTopic,
-                new LogSchema());
+        FlinkKafkaProducer<ResultMap> producer = new FlinkKafkaProducer<>(kafkaBootstrapServers, kafkaTopic,
+                new LogSchema2());
         producer.setLogFailuresOnly(false);
         stream.addSink(producer).setParallelism(kafkaParallelism).name(name).uid(name);
     }
 
-    private static void sinkToElasticsearch(ParameterTool parameter, DataStream<LogEntry> dataSource) {
+    private static void sinkToElasticsearch(ParameterTool parameter, DataStream<ResultMap> dataSource) {
         List<HttpHost> esHttpHosts = ElasticsearchUtil.getEsAddresses(parameter.get(ConfigConstant.ELASTICSEARCH_HOSTS));
         int bulkMaxActions = parameter.getInt(ConfigConstant.ELASTICSEARCH_BULK_FLUSH_MAX_ACTIONS, 5000);
         int bulkMaxSize = parameter.getInt(ConfigConstant.ELASTICSEARCH_BULK_FLUSH_MAX_SIZE_MB, 5);
@@ -163,7 +218,7 @@ public class App {
         String indexPostfix = parameter.get(ConfigConstant.ELASTICSEARCH_INDEX_POSTFIX, "");
 
         String name = "ES-sink";
-        ElasticsearchSink.Builder<LogEntry> esSinkBuilder = new ElasticsearchSink.Builder<>(esHttpHosts, new EsSinkFunction(indexPostfix));
+        ElasticsearchSink.Builder<ResultMap> esSinkBuilder = new ElasticsearchSink.Builder<>(esHttpHosts, new EsSinkFunction2(indexPostfix));
         esSinkBuilder.setBulkFlushMaxActions(bulkMaxActions);
         esSinkBuilder.setBulkFlushMaxSizeMb(bulkMaxSize);
         esSinkBuilder.setBulkFlushInterval(intervalMillis);
@@ -175,16 +230,16 @@ public class App {
         dataSource.addSink(esSinkBuilder.build()).setParallelism(esSinkParallelism).name(name).uid(name);
     }
 
-    private static void sinkToRedis(ParameterTool parameter, DataStream<LogEntry> dataSource) {
+    private static void sinkToRedis(ParameterTool parameter, DataStream<ResultMap> dataSource) {
         // save statistic information in redis
         int windowTime = parameter.getInt(ConfigConstant.REDIS_WINDOW_TIME_SECONDS);
         int windowCount = parameter.getInt(ConfigConstant.REDIS_WINDOW_TRIGGER_COUNT);
         int redisSinkParallelism = parameter.getInt(ConfigConstant.REDIS_SINK_PARALLELISM);
         String name = "redis-agg-log";
-        DataStream<LogStatWindowResult> keyedStream = dataSource.keyBy((KeySelector<LogEntry, String>) log -> log.getIndex())
+        DataStream<LogStatWindowResult> keyedStream = dataSource.keyBy((KeySelector<ResultMap, String>) log -> log.getIndex())
                 .timeWindow(Time.seconds(windowTime))
                 .trigger(new CountTriggerWithTimeout<>(windowCount, TimeCharacteristic.ProcessingTime))
-                .aggregate(new LogStatAggregateFunction(), new LogStatWindowFunction())
+                .aggregate(new LogStatAggregateFunction2(), new LogStatWindowFunction())
                 .setParallelism(redisSinkParallelism).name(name).uid(name);
         String sinkName = "redis-sink";
         keyedStream.addSink(new RedisAggSinkFunction()).setParallelism(redisSinkParallelism).name(sinkName).uid(sinkName);
