@@ -14,6 +14,13 @@ public class Message {
     private String remoteaddr;
     private String sqlserver;
     private String sql;
+    private String requestserver;
+    private String sqladdr;
+    private String sqlport;
+    private String sqluser;
+    private String sqlpwd;
+    private String sqldb;
+    private String sqltable;
     private Date timestamp;
     private Date atTimestamp;
 
@@ -101,6 +108,62 @@ public class Message {
         this.atTimestamp = atTimestamp;
     }
 
+    public String getRequestserver() {
+        return requestserver;
+    }
+
+    public void setRequestserver(String requestserver) {
+        this.requestserver = requestserver;
+    }
+
+    public String getSqladdr() {
+        return sqladdr;
+    }
+
+    public void setSqladdr(String sqladdr) {
+        this.sqladdr = sqladdr;
+    }
+
+    public String getSqlport() {
+        return sqlport;
+    }
+
+    public void setSqlport(String sqlport) {
+        this.sqlport = sqlport;
+    }
+
+    public String getSqluser() {
+        return sqluser;
+    }
+
+    public void setSqluser(String sqluser) {
+        this.sqluser = sqluser;
+    }
+
+    public String getSqlpwd() {
+        return sqlpwd;
+    }
+
+    public void setSqlpwd(String sqlpwd) {
+        this.sqlpwd = sqlpwd;
+    }
+
+    public String getSqldb() {
+        return sqldb;
+    }
+
+    public void setSqldb(String sqldb) {
+        this.sqldb = sqldb;
+    }
+
+    public String getSqltable() {
+        return sqltable;
+    }
+
+    public void setSqltable(String sqltable) {
+        this.sqltable = sqltable;
+    }
+
     @Override
     public String toString() {
         return "Message{" +
@@ -112,6 +175,13 @@ public class Message {
                 ", remoteaddr='" + remoteaddr + '\'' +
                 ", sqlserver='" + sqlserver + '\'' +
                 ", sql='" + sql + '\'' +
+                ", requestserver='" + requestserver + '\'' +
+                ", sqladdr='" + sqladdr + '\'' +
+                ", sqlport='" + sqlport + '\'' +
+                ", sqluser='" + sqluser + '\'' +
+                ", sqlpwd='" + sqlpwd + '\'' +
+                ", sqldb='" + sqldb + '\'' +
+                ", sqltable='" + sqltable + '\'' +
                 ", timestamp=" + timestamp +
                 ", atTimestamp=" + atTimestamp +
                 '}';

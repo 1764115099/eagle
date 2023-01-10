@@ -7,6 +7,9 @@ import com.alarm.eagle.es.EsActionRequestFailureHandler;
 //import com.alarm.eagle.es.EsSinkFunction;
 import com.alarm.eagle.es.EsSinkFunction2;
 import com.alarm.eagle.log.*;
+import com.alarm.eagle.log.http.*;
+import com.alarm.eagle.log.sql.*;
+import com.alarm.eagle.mysql.MysqlSink;
 import com.alarm.eagle.redis.*;
 import com.alarm.eagle.rule.RuleBase;
 import com.alarm.eagle.rule.RuleSourceFunction;
@@ -29,6 +32,8 @@ import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer;
 import org.apache.http.HttpHost;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisCluster;
 
 import java.util.*;
 
@@ -49,12 +54,13 @@ public class App {
             DataStream<LogEntry> dataSource = getKafkaDataSource(parameter, env);
 
             /*
-                转换流数据类型，将原有eagle数据流程中的logEntry实体类中的message（即实际rasp日志部分）部分做反序列化，供后续处理使用
+                转换流数据类型，将原有eagle数据流程中的logEntry实体类中的message（即实际rasp日志部分）部分做反序列化，
+                    然后根据message内的信息维系一个result类型对象，用于增量和全量数据入库
              */
-            SingleOutputStreamOperator<Message> messageStream = dataSource.map(new MapFunction<LogEntry, Message>() {
+            SingleOutputStreamOperator<Result> resultStream = dataSource.map(new MapFunction<LogEntry, Result>() {
 
                 @Override
-                public Message map(LogEntry logEntry) throws Exception {
+                public Result map(LogEntry logEntry) throws Exception {
                     /*
                         Message: 2022-12-21 16:19:05,606 INFO  [http-nio-8080-exec-6][com.baidu.openrasp.plugin.js.log] http://112.124.65.22:31875/vulns/012-jdbc-mysql.jsp [eagle-logger] ;;"timestamp":"2022-12-21T08:19:05.606Z","atTimestamp":"2022-12-21T08:19:05.606Z","id":"9y8em64ycv400","requestpath":"/vulns/012-jdbc-mysql.jsp","querystring":"id=1","requestmethod":"get","requestprotocol":"http/1.1","remoteaddr":"10.0.18.237","sqlserver":"mysql","sql":"SELECT * FROM vuln WHERE id = 1";;
                         根据事先在日志中预留的分隔符 “;;”，切割出有用的数据，便于反序列化
@@ -62,10 +68,13 @@ public class App {
                     String[] values = logEntry.getMessage().split(";;");
                     String jsonString = "{" + values[1] + "}";
                     Message message = JsonUtil.jsonToObject(jsonString, Message.class);
-                    return message;
+                    Result result = messageToResult(message);
+                    return result;
                 }
                 private static final long serialVersionUID = -6867736771747690202L;
-            });
+            }).setParallelism(1);
+//            resultStream.print();
+            resultStream.addSink(new MysqlSink()).setParallelism(1);
 
             /*
                 利用process批量处理逻辑，还需完善
@@ -78,10 +87,10 @@ public class App {
             /*
                 根据url做基于时间窗口的聚合操作，一次仅根据keyBy做一种聚合
              */
-            SingleOutputStreamOperator<MessageCount> urlAggregate = messageStream.keyBy(message -> message.getUrl())
-                    .timeWindow(Time.seconds(30))
-                    .aggregate(new CountAggregateMessage());
-            urlAggregate.print();
+//            SingleOutputStreamOperator<MessageCount> urlAggregate = messageStream.keyBy(message -> message.getUrl())
+//                    .timeWindow(Time.seconds(30))
+//                    .aggregate(new CountAggregateMessage());
+//            urlAggregate.print();
 
 
            /*
@@ -114,6 +123,211 @@ public class App {
         } catch (Exception e) {
             logger.error(e.toString());
         }
+    }
+
+    /*
+        根据message对象内的信息，生成一个Result类型的对象用于增量和全量数据入库
+        //TODO 还没加锁，所以并发操作的时候会出现，同时判断sismember为false，然后hset内同一个key被修改多次id，并且同一条数据会有多个id入库的情况，目前并发调成了1，待优化
+     */
+    public static Result messageToResult(Message message){
+		JedisCluster jedis = RedisUtil.getJedisCluster();
+//        Jedis jedis = RedisUtil.getJedisClient();
+
+
+        HttpResult httpResult = new HttpResult();
+
+        /*
+            Request Server 增量入库
+            HashSet
+                requestSrv => requestServer : srvId
+         */
+        String srvKey = message.getRequestserver();
+        Srv srv = new Srv();
+        if (!jedis.sismember("requestServer", srvKey)) {
+            jedis.sadd("requestServer", srvKey);
+            Long srvId = SnowIdUtils.uniqueLong();
+            srv.setId(srvId);
+            srv.setAddr(srvKey);
+            srv.setTime(DateUtil.getCurrentDate());
+            httpResult.setSrv(srv);
+
+            jedis.hset("requestSrv", srvKey, String.valueOf(srvId));
+        }
+
+
+        /*
+            Request Path 增量入库
+            HashSet
+                requestApi => requestPath : apiId
+         */
+        String apiKey = message.getRequestpath();
+        Api api = new Api();
+        if (!jedis.sismember("requestPath", apiKey)) {
+            jedis.sadd("requestPath", apiKey);
+            Long apiId = SnowIdUtils.uniqueLong();
+            api.setId(apiId);
+            String srvId = jedis.hget("requestSrv", srvKey);
+            api.setSrvId(Long.valueOf(srvId));
+            api.setUrl(apiKey);
+            api.setTime(DateUtil.getCurrentDate());
+            httpResult.setApi(api);
+
+            jedis.hset("requestApi", apiKey, String.valueOf(apiId));
+        }
+
+
+        /*
+            Request RemoteAddr 增量入库
+            HashSet
+                requestClient => remoteAddr : clientId
+         */
+        String clientKey = message.getRemoteaddr();
+        Client client = new Client();
+        if (!jedis.sismember("requestRemoteAddr", clientKey)) {
+            jedis.sadd("requestRemoteAddr", clientKey);
+            Long clientId = SnowIdUtils.uniqueLong();
+            client.setId(clientId);
+            client.setIp(clientKey);
+            httpResult.setClient(client);
+
+            jedis.hset("requestClient", clientKey, String.valueOf(clientId));
+        }
+
+
+
+        /*
+            Http 全量入库
+            只有增量数据才会产生新的id，所以借助Redis
+                先通过set去重，只有set内不存在的key才会生成新的id，放入HashSet内
+                    如果需要id就通过key去对应的HashSet内取
+         */
+        Long clientApiId = SnowIdUtils.uniqueLong();
+        Long apiId = Long.valueOf(jedis.hget("requestApi", apiKey));
+        Long clientId = Long.valueOf(jedis.hget("requestClient", clientKey));
+
+        ClientApi clientApi = new ClientApi();
+        clientApi.setId(clientApiId);
+        clientApi.setApiId(apiId);
+        clientApi.setClientId(clientId);
+        clientApi.setTime(DateUtil.getCurrentDate());
+        httpResult.setClientApi(clientApi);
+
+        SqlResult sqlResult = new SqlResult();
+
+        /*
+            DbSrv 增量入库
+            HashSet
+                sqlDbSrv => sqlAddr + ":" + sqlPort : dbSrvId
+         */
+        String sqlAddr = message.getSqladdr();
+        String sqlPort = message.getSqlport();
+        String dbSrvKey = sqlAddr + ":" + sqlPort;
+        Dbsrv dbsrv = new Dbsrv();
+        if (!jedis.sismember("sqlAddr", dbSrvKey)) {
+            jedis.sadd("sqlAddr", dbSrvKey);
+            Long dbSrvId = SnowIdUtils.uniqueLong();
+            dbsrv.setId(dbSrvId);
+            dbsrv.setIp(sqlAddr);
+            dbsrv.setPort(sqlPort);
+            dbsrv.setType(message.getSqlserver());
+            dbsrv.setTime(DateUtil.getCurrentDate());
+            sqlResult.setDbsrv(dbsrv);
+
+            jedis.hset("sqlDbSrv", dbSrvKey, String.valueOf(dbSrvId));
+        }
+
+        /*
+            Db 增量入库
+            HashSet
+                sqlDb => sqlDb : dbId
+         */
+        String dbKey = message.getSqldb();
+        Db db = new Db();
+        if (!jedis.sismember("sqlDbSet", dbKey)) {
+            jedis.sadd("sqlDbSet", dbKey);
+            Long dbId = SnowIdUtils.uniqueLong();
+            db.setId(dbId);
+            String dbSrvId = jedis.hget("sqlDbSrv", dbSrvKey);
+            db.setDbsrvId(Long.valueOf(dbSrvId));
+            db.setName(dbKey);
+            sqlResult.setDb(db);
+
+            jedis.hset("sqlDb", dbKey, String.valueOf(dbId));
+        }
+
+        /*
+            Account 增量入库
+            HashSet
+                sqlAccount => sqlUserName + ":" + sqlPwd : accountId
+                    如果仅去重sqlUser，那相同数据库user，但password不同的账户信息，展示在页面是password会为相同user的第一条的password
+                        不显示password则按照username去重即可
+         */
+        String sqlUserName = message.getSqluser();
+        String sqlPwd = message.getSqlpwd();
+        String accountKey = sqlUserName;
+        Account account = new Account();
+        if (!jedis.sismember("sqlAccountSet", accountKey)) {
+            jedis.sadd("sqlAccountSet", accountKey);
+            Long accountId = SnowIdUtils.uniqueLong();
+            account.setId(accountId);
+            String dbId = jedis.hget("sqlDb", dbKey);
+            account.setDbId(Long.valueOf(dbId));
+            account.setUsername(sqlUserName);
+            account.setPwd(sqlPwd);
+            sqlResult.setAccount(account);
+
+            jedis.hset("sqlAccount", accountKey, String.valueOf(accountId));
+        }
+
+        /*
+            Table 增量入库
+            HashSet
+                sqlTable => sqlTable : tableId
+            具体还需根据到时候识别出来的Table格式修改table.setName输入数据
+         */
+        String tableKey = message.getSqltable();
+        Table table = new Table();
+        if (!jedis.sismember("sqlTableSet", tableKey)) {
+            jedis.sadd("sqlTableSet", tableKey);
+            Long tableId = SnowIdUtils.uniqueLong();
+            table.setId(tableId);
+            String dbId = jedis.hget("sqlDb", dbKey);
+            table.setDbId(Long.valueOf(dbId));
+            table.setName(tableKey);
+            table.setTime(DateUtil.getCurrentDate());
+            sqlResult.setTable(table);
+
+            jedis.hset("sqlTable", tableKey, String.valueOf(tableId));
+        }
+
+        /*
+            Sql全量入库
+            只有增量数据才会产生新的id，所以借助Redis
+                先通过set去重，只有set内不存在的key才会生成新的id，放入HashSet内
+                    如果需要sql相关的id就通过key去对应的HashSet内取
+                        http相关的id在上方已经取出，直接使用即可
+         */
+        Long apiTableId = SnowIdUtils.uniqueLong();
+        Long accountId = Long.valueOf(jedis.hget("sqlAccount", accountKey));
+        Long tableId = Long.valueOf(jedis.hget("sqlTable", tableKey));
+
+        ApiTable apiTable = new ApiTable();
+        apiTable.setId(apiTableId);
+        apiTable.setAccountId(accountId);
+        apiTable.setTableId(tableId);
+        apiTable.setApiId(apiId);
+        apiTable.setRequestId(clientApiId);
+        apiTable.setTime(DateUtil.getCurrentDate());
+        sqlResult.setApiTable(apiTable);
+
+        /*
+            将所有需要持久化的信息存入map
+         */
+        Result result = new Result();
+        result.setHttpResult(httpResult);
+        result.setSqlResult(sqlResult);
+
+        return result;
     }
 
     private static StreamExecutionEnvironment getStreamExecutionEnvironment(ParameterTool parameter) {

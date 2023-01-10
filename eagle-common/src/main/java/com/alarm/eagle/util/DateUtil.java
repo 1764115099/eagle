@@ -7,6 +7,8 @@ import org.joda.time.format.DateTimeFormatter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.sql.Timestamp;
+import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 import java.util.TimeZone;
@@ -17,6 +19,7 @@ public class DateUtil {
     private static final DateTimeFormatter YMD_HMS = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss");
     private static final DateTimeFormatter zFORMAT = DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ss.SSSZ");
     private static final DateTimeFormatter FORMAT = DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ss.SSS");
+    private static SimpleDateFormat dateFormat= new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
 
     public static long unixTimestamp(String ymdhms) {
         return YMD_HMS.parseMillis(ymdhms);
@@ -93,6 +96,20 @@ public class DateUtil {
 
     public static long tomorrowZeroTimestampMs(long now, int timeZone) {
         return now - (now + timeZone * 3600000L) % 86400000 + 86400000;
+    }
+
+    public static String getCurrentTime(){
+        DateTime now = DateTime.now();
+        return dateFormat.format(now.toDate());
+    }
+
+    public static Date getCurrentDate(){
+        DateTime now = DateTime.now();
+        return now.toDate();
+    }
+
+    public static Timestamp getSqlDate(Date date){
+        return new Timestamp(date.getTime());
     }
 
     public static void main(String[] args) {
