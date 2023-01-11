@@ -12,6 +12,7 @@ import com.alarm.eagle.rule.RuleBase;
 import com.alarm.eagle.rule.RuleSourceFunction;
 import com.alarm.eagle.util.*;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.java.functions.KeySelector;
@@ -101,8 +102,8 @@ public class App {
             /*
                 旧有drools逻辑
              */
-//            BroadcastStream<RuleBase> ruleSource = getRuleDataSource(parameter, env);
-//            SingleOutputStreamOperator<LogEntry> processedStream = processLogStream(parameter, dataSource, ruleSource);
+            BroadcastStream<RuleBase> ruleSource = getRuleDataSource(parameter, env);
+            SingleOutputStreamOperator<LogEntry> processedStream = processLogStream(parameter, dataSource, ruleSource);
 //            sinkToRedis(parameter, processedStream);
 //            sinkToElasticsearch(parameter, processedStream);
 
@@ -188,7 +189,7 @@ public class App {
         }
 
 //        JsonArray resJson = JsonParser.parseString(content).getAsJsonArray();
-        JsonArray resJson = JsonParser.parseString(content).getAsJsonObject().getAsJsonArray("data");
+        JsonObject resJson = JsonParser.parseString(content).getAsJsonObject().getAsJsonObject("data");
         if (resJson == null) {
             logger.error("Failed to parse json:{}", content);
             return null;

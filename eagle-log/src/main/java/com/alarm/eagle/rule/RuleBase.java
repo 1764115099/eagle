@@ -14,39 +14,33 @@ import java.util.List;
  */
 public class RuleBase implements Serializable {
     private static final long serialVersionUID = -6249685986229931397L;
-    private List<Rule> rules = new ArrayList<>();
+    private JsonObject rule = new JsonObject();
     private String name = "Empty-Name";
     private String hash = "";
 
-    public static RuleBase createRuleBase(JsonArray jsonArray) {
+    public static RuleBase createRuleBase(JsonObject jsonObject) {
         RuleBase ruleBase = new RuleBase();
-        for (JsonElement obj : jsonArray) {
-            JsonObject job = (JsonObject) obj;
-            Rule rule = new Rule();
-            rule.setId(job.get("id").getAsString());
-            rule.setType(job.get("type").getAsString());
-            rule.setScript(job.get("script").getAsString());
-            rule.setState(job.get("state").getAsString());
-            ruleBase.rules.add(rule);
-        }
-        String str = ruleBase.toString();
+
+        ruleBase.setRule(jsonObject);
+
+        String str = jsonObject.toString();
         ruleBase.hash = Md5Util.getMd5(str);
         ruleBase.name = "rules-" + ruleBase.hash;
         return ruleBase;
     }
 
-    public static RuleBase createRuleBase(JsonArray jsonArray, String name) {
-        RuleBase ruleBase = createRuleBase(jsonArray);
+    public static RuleBase createRuleBase(JsonObject jsonObject, String name) {
+        RuleBase ruleBase = createRuleBase(jsonObject);
         ruleBase.name = name;
         return ruleBase;
     }
 
-    public List<Rule> getRules() {
-        return rules;
+    public JsonObject getRule() {
+        return rule;
     }
 
-    public void setRules(List<Rule> rules) {
-        this.rules = rules;
+    public void setRule(JsonObject rule) {
+        this.rule = rule;
     }
 
     public String getName() {
@@ -68,7 +62,7 @@ public class RuleBase implements Serializable {
     @Override
     public String toString() {
         return "RuleBase{" +
-                "rules=" + rules +
+                "rule=" + rule.toString() +
                 ", name='" + name + '\'' +
                 ", hash='" + hash + '\'' +
                 '}';
