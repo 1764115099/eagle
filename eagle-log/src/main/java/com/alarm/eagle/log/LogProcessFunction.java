@@ -70,7 +70,7 @@ public class LogProcessFunction extends BroadcastProcessFunction<LogEntry, RuleB
             logger.info("Receive same log rules, rules: {}", ruleBase.getName());
             return;
         }
-        logger.info("Get " + ruleBase.getRules().size() + " rules, rules: " + ruleBase.getName());
+//        logger.info("Get " + ruleBase.getRules().size() + " rules, rules: " + ruleBase.getName());
         if (logProcessor != null) {
             logProcessor.destroy();
             if (!logProcessor.loadRules(ruleBase)) {

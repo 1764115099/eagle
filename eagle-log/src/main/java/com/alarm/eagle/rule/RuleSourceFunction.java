@@ -2,6 +2,7 @@ package com.alarm.eagle.rule;
 
 import com.alarm.eagle.util.HttpUtil;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.apache.flink.streaming.api.functions.source.RichSourceFunction;
 import org.slf4j.Logger;
@@ -32,7 +33,7 @@ public class RuleSourceFunction extends RichSourceFunction<RuleBase> {
             }
 
 //            JsonArray resJson = JsonParser.parseString(content).getAsJsonArray();
-            JsonArray resJson = JsonParser.parseString(content).getAsJsonObject().getAsJsonArray("data");
+            JsonObject resJson = JsonParser.parseString(content).getAsJsonObject().getAsJsonObject("data");
             if (resJson == null) {
                 logger.error("Failed to parse json:{}", content);
                 return;

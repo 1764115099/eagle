@@ -1,7 +1,6 @@
 package com.alarm.eagle.drools;
 
 import com.alarm.eagle.log.LogEntry;
-import com.alarm.eagle.rule.Rule;
 import com.alarm.eagle.rule.RuleBase;
 
 import java.util.List;
@@ -18,9 +17,9 @@ public interface LogProcessor {
 
     boolean loadRules(RuleBase ruleBase);
 
-    boolean addRule(Rule rule);
+//    boolean addRule(Rule rule);
 
-    boolean removeRule(Rule rule);
+//    boolean removeRule(Rule rule);
 
     void destroy();
 }
