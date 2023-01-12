@@ -14,16 +14,16 @@ import java.util.List;
  */
 public class RuleBase implements Serializable {
     private static final long serialVersionUID = -6249685986229931397L;
-    private JsonObject rule = new JsonObject();
+    private String rule = "";
     private String name = "Empty-Name";
     private String hash = "";
 
     public static RuleBase createRuleBase(JsonObject jsonObject) {
         RuleBase ruleBase = new RuleBase();
-
-        ruleBase.setRule(jsonObject);
-
         String str = jsonObject.toString();
+        ruleBase.setRule(str);
+
+
         ruleBase.hash = Md5Util.getMd5(str);
         ruleBase.name = "rules-" + ruleBase.hash;
         return ruleBase;
@@ -35,11 +35,11 @@ public class RuleBase implements Serializable {
         return ruleBase;
     }
 
-    public JsonObject getRule() {
+    public String getRule() {
         return rule;
     }
 
-    public void setRule(JsonObject rule) {
+    public void setRule(String rule) {
         this.rule = rule;
     }
 

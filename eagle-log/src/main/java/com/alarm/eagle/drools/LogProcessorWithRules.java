@@ -72,7 +72,7 @@ public class LogProcessorWithRules implements LogProcessor {
     @Override
     public boolean loadRules(RuleBase rb) {
 //        KieSessionHelper ksHelper = new KieSessionHelper(rulePackage);
-        if (rb.getRule().toString().isEmpty()) {
+        if (rb.getRule().isEmpty()) {
             logger.error("Failed to load rules, hash:{}", rb.getHash());
             return false;
         }
