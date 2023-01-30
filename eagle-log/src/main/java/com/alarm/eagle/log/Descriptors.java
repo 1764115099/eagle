@@ -20,4 +20,8 @@ public class Descriptors {
     public static final OutputTag<ResultMap> kafkaOutputTag2 = new OutputTag<ResultMap>("log-kafka-output",
             TypeInformation.of(ResultMap.class)) {
     };
+
+    public static final OutputTag<HitResult> kafkaOutputHitResultTag = new OutputTag<HitResult>("log-hit-kafka-output",
+            TypeInformation.of(HitResult.class)) {
+    };
 }

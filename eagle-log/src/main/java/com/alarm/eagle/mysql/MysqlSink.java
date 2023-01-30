@@ -47,6 +47,7 @@ public class MysqlSink extends RichSinkFunction<Result> {
         //加载数据库驱动
         Class.forName("com.mysql.jdbc.Driver");
         //获取连接
+//        connection = DriverManager.getConnection("jdbc:mysql://112.124.65.22:31242/flinktest", "root", "111111");
         connection = DriverManager.getConnection("jdbc:mysql://112.124.65.22:31242/datasec", "root", "111111");
     }
 
@@ -142,68 +143,70 @@ public class MysqlSink extends RichSinkFunction<Result> {
             /*
                 Dbsrv增量入库
              */
-            Dbsrv dbsrv = result.getSqlResult().getDbsrv();
-            if (dbsrv != null) {
-                dbSrvPreparedStatement = connection.prepareStatement(dbSrvSql);
-                dbSrvPreparedStatement.setLong(1,dbsrv.getId());
-                dbSrvPreparedStatement.setString(2,dbsrv.getIp());
-                dbSrvPreparedStatement.setString(3,dbsrv.getPort());
-                dbSrvPreparedStatement.setString(4,dbsrv.getType());
-                dbSrvPreparedStatement.setTimestamp(5,DateUtil.getSqlDate(dbsrv.getTime()));
-                dbSrvPreparedStatement.execute();
-            }
+            if(result.getSqlResult().getApiTable() != null) {
+                Dbsrv dbsrv = result.getSqlResult().getDbsrv();
+                if (dbsrv != null) {
+                    dbSrvPreparedStatement = connection.prepareStatement(dbSrvSql);
+                    dbSrvPreparedStatement.setLong(1, dbsrv.getId());
+                    dbSrvPreparedStatement.setString(2, dbsrv.getIp());
+                    dbSrvPreparedStatement.setString(3, dbsrv.getPort());
+                    dbSrvPreparedStatement.setString(4, dbsrv.getType());
+                    dbSrvPreparedStatement.setTimestamp(5, DateUtil.getSqlDate(dbsrv.getTime()));
+                    dbSrvPreparedStatement.execute();
+                }
 
             /*
                 Db增量入库
              */
-            Db db = result.getSqlResult().getDb();
-            if (db != null) {
-                dbPreparedStatement = connection.prepareStatement(dbSql);
-                dbPreparedStatement.setLong(1,db.getId());
-                dbPreparedStatement.setLong(2,db.getDbsrvId());
-                dbPreparedStatement.setString(3,db.getName());
-                dbPreparedStatement.execute();
-            }
+                Db db = result.getSqlResult().getDb();
+                if (db != null) {
+                    dbPreparedStatement = connection.prepareStatement(dbSql);
+                    dbPreparedStatement.setLong(1, db.getId());
+                    dbPreparedStatement.setLong(2, db.getDbsrvId());
+                    dbPreparedStatement.setString(3, db.getName());
+                    dbPreparedStatement.execute();
+                }
 
             /*
                 Account增量入库
              */
-            Account account = result.getSqlResult().getAccount();
-            if (account != null) {
-                accountPreparedStatement = connection.prepareStatement(accountSql);
-                accountPreparedStatement.setLong(1,account.getId());
-                accountPreparedStatement.setLong(2,account.getDbId());
-                accountPreparedStatement.setString(3,account.getUsername());
-                accountPreparedStatement.setString(4,account.getPwd());
-                accountPreparedStatement.execute();
-            }
+                Account account = result.getSqlResult().getAccount();
+                if (account != null) {
+                    accountPreparedStatement = connection.prepareStatement(accountSql);
+                    accountPreparedStatement.setLong(1, account.getId());
+                    accountPreparedStatement.setLong(2, account.getDbId());
+                    accountPreparedStatement.setString(3, account.getUsername());
+                    accountPreparedStatement.setString(4, account.getPwd());
+                    accountPreparedStatement.execute();
+                }
 
             /*
                 Table增量入库
              */
-            Table table = result.getSqlResult().getTable();
-            if (table != null) {
-                tablePreparedStatement = connection.prepareStatement(tableSql);
-                tablePreparedStatement.setLong(1,table.getId());
-                tablePreparedStatement.setLong(2,table.getDbId());
-                tablePreparedStatement.setString(3,table.getName());
-                tablePreparedStatement.setTimestamp(4,DateUtil.getSqlDate(table.getTime()));
-                tablePreparedStatement.execute();
-            }
+                Table table = result.getSqlResult().getTable();
+                if (table != null) {
+                    tablePreparedStatement = connection.prepareStatement(tableSql);
+                    tablePreparedStatement.setLong(1, table.getId());
+                    tablePreparedStatement.setLong(2, table.getDbId());
+                    tablePreparedStatement.setString(3, table.getName());
+                    tablePreparedStatement.setTimestamp(4, DateUtil.getSqlDate(table.getTime()));
+                    tablePreparedStatement.execute();
+                }
 
 
             /*
                 ApiTable全量入库
              */
-            ApiTable apiTable = result.getSqlResult().getApiTable();
-            apiTablePreparedStatement = connection.prepareStatement(apiTableSql);
-            apiTablePreparedStatement.setLong(1,apiTable.getId());
-            apiTablePreparedStatement.setLong(2,apiTable.getApiId());
-            apiTablePreparedStatement.setLong(3,apiTable.getTableId());
-            apiTablePreparedStatement.setLong(4,apiTable.getAccountId());
-            apiTablePreparedStatement.setLong(5,apiTable.getRequestId());
-            apiTablePreparedStatement.setTimestamp(6,DateUtil.getSqlDate(apiTable.getTime()));
-            apiTablePreparedStatement.execute();
+                ApiTable apiTable = result.getSqlResult().getApiTable();
+                apiTablePreparedStatement = connection.prepareStatement(apiTableSql);
+                apiTablePreparedStatement.setLong(1, apiTable.getId());
+                apiTablePreparedStatement.setLong(2, apiTable.getApiId());
+                apiTablePreparedStatement.setLong(3, apiTable.getTableId());
+                apiTablePreparedStatement.setLong(4, apiTable.getAccountId());
+                apiTablePreparedStatement.setLong(5, apiTable.getRequestId());
+                apiTablePreparedStatement.setTimestamp(6, DateUtil.getSqlDate(apiTable.getTime()));
+                apiTablePreparedStatement.execute();
+            }
 
         } catch (Exception e) {
             e.printStackTrace();

@@ -52,12 +52,13 @@ public class EagleProperties {
                     map.put(ConfigConstant.FLINK_MODE, ConfigConstant.MODE_TEST);
                     map.put(ConfigConstant.KAFKA_BOOTSTRAP_SERVERS, "112.124.65.22:9092");
                     map.put(ConfigConstant.KAFKA_GROUP_ID, "log-test");
-                    map.put(ConfigConstant.KAFKA_TOPIC, "eagle-log-test");
+                    map.put(ConfigConstant.KAFKA_TOPIC, "eagle-log-test-1");
                     map.put(ConfigConstant.KAFKA_TOPIC_PARALLELISM, "3");
 
                     map.put(ConfigConstant.KAFKA_SINK_INDEX, "log_alarm");
                     map.put(ConfigConstant.KAFKA_SINK_BOOTSTRAP_SERVERS, "112.124.65.22:9092");
-                    map.put(ConfigConstant.KAFKA_SINK_TOPIC, "sink-kafka-test");
+                    map.put(ConfigConstant.KAFKA_SINK_TOPIC, "sink-hitresult");
+//                    map.put(ConfigConstant.KAFKA_SINK_TOPIC, "sink-hitresult-test-1");
                     map.put(ConfigConstant.KAFKA_SINK_TOPIC_PARALLELISM, "3");
                     break;
             }

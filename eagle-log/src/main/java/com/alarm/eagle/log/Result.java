@@ -7,6 +7,7 @@ import com.alarm.eagle.log.sql.SqlResult;
 public class Result {
     private HttpResult httpResult;
     private SqlResult sqlResult;
+    private Message message;
 
     public HttpResult getHttpResult() {
         return httpResult;
@@ -24,11 +25,20 @@ public class Result {
         this.sqlResult = sqlResult;
     }
 
+    public Message getMessage() {
+        return message;
+    }
+
+    public void setMessage(Message message) {
+        this.message = message;
+    }
+
     @Override
     public String toString() {
         return "Result{" +
                 "httpResult=" + httpResult +
                 ", sqlResult=" + sqlResult +
+                ", message=" + message +
                 '}';
     }
 }

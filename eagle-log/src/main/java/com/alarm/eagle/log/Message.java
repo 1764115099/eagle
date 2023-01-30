@@ -11,9 +11,12 @@ public class Message {
     private String querystring;
     private String requestmethod;
     private String requestprotocol;
+    private String requestheader;
+    private String requestbody;
     private String remoteaddr;
     private String sqlserver;
     private String sql;
+    private String sqlresult;
     private String requestserver;
     private String sqladdr;
     private String sqlport;
@@ -68,6 +71,22 @@ public class Message {
         this.requestprotocol = requestprotocol;
     }
 
+    public String getRequestheader() {
+        return requestheader;
+    }
+
+    public void setRequestheader(String requestheader) {
+        this.requestheader = requestheader;
+    }
+
+    public String getRequestbody() {
+        return requestbody;
+    }
+
+    public void setRequestbody(String requestbody) {
+        this.requestbody = requestbody;
+    }
+
     public String getRemoteaddr() {
         return remoteaddr;
     }
@@ -90,6 +109,14 @@ public class Message {
 
     public void setSql(String sql) {
         this.sql = sql;
+    }
+
+    public String getSqlresult() {
+        return sqlresult;
+    }
+
+    public void setSqlresult(String sqlresult) {
+        this.sqlresult = sqlresult;
     }
 
     public Date getTimestamp() {
@@ -172,9 +199,12 @@ public class Message {
                 ", querystring='" + querystring + '\'' +
                 ", requestmethod='" + requestmethod + '\'' +
                 ", requestprotocol='" + requestprotocol + '\'' +
+                ", requestheader='" + requestheader + '\'' +
+                ", requestbody='" + requestbody + '\'' +
                 ", remoteaddr='" + remoteaddr + '\'' +
                 ", sqlserver='" + sqlserver + '\'' +
                 ", sql='" + sql + '\'' +
+                ", sqlresult='" + sqlresult + '\'' +
                 ", requestserver='" + requestserver + '\'' +
                 ", sqladdr='" + sqladdr + '\'' +
                 ", sqlport='" + sqlport + '\'' +

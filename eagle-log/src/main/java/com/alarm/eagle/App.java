@@ -77,6 +77,44 @@ public class App {
 //            resultStream.print();
             resultStream.addSink(new MysqlSink()).setParallelism(1);
 
+            //测试Sink-Kafka
+
+//            SingleOutputStreamOperator<HitResult> hitResultStream = resultStream.map(new MapFunction<Result, HitResult>() {
+//
+//                @Override
+//                public HitResult map(Result result) throws Exception {
+//                    HitResult hitResult = new HitResult();
+//                    hitResult.setId(SnowIdUtils.uniqueLong());
+//                    Long ruleTemplateId = Long.valueOf("1");
+//                    Long requestId = result.getHttpResult().getClientApi().getId();
+//
+//                    hitResult.setRuleTemplateId(ruleTemplateId);
+//                    hitResult.setRequestId(requestId);
+//
+//                    Content content = new Content();
+//                    Message message = result.getMessage();
+//                    content.setRequestProtocol(message.getRequestprotocol());
+//                    content.setRequestMethod(message.getRequestmethod());
+//                    content.setRequestHeader("{}");
+//                    content.setRequestBody("{}");
+//                    content.setRequestServer(message.getRequestserver());
+//                    content.setRequestPath(message.getRequestpath());
+//                    content.setRequestRemoteAddr(message.getRemoteaddr());
+//                    content.setSqlType(message.getSqlserver());
+//                    content.setSqlServer(message.getSqladdr());
+//                    content.setSqlPort(message.getSqlport());
+//                    content.setSqlUserName(message.getSqluser());
+//                    content.setSqlPwd(message.getSqlpwd());
+//                    content.setSqlDb(message.getSqldb());
+//                    content.setSqlTable(message.getSqltable());
+//                    hitResult.setContent(content);
+//                    return hitResult;
+//                }
+//                private static final long serialVersionUID = -6867736771747690203L;
+//            });
+//            hitResultStream.print();
+//            sinkHitResultToKafka(parameter,hitResultStream);
+
             /*
                 利用process批量处理逻辑，还需完善
              */
@@ -112,12 +150,16 @@ public class App {
                 旧有drools逻辑
              */
             BroadcastStream<RuleBase> ruleSource = getRuleDataSource(parameter, env);
-            SingleOutputStreamOperator<LogEntry> processedStream = processLogStream(parameter, dataSource, ruleSource);
+//            SingleOutputStreamOperator<LogEntry> processedStream = processLogStream(parameter, dataSource, ruleSource);
+            SingleOutputStreamOperator<HitResult> processedStream = processResultStream(parameter, resultStream, ruleSource);
 //            sinkToRedis(parameter, processedStream);
 //            sinkToElasticsearch(parameter, processedStream);
 
 //            DataStream<LogEntry> kafkaOutputStream2 = processedStream.getSideOutput(Descriptors.kafkaOutputTag);
 //            sinkLogToKafka(parameter, kafkaOutputStream);
+            DataStream<HitResult> kafkaOutputHitStream = processedStream.getSideOutput(Descriptors.kafkaOutputHitResultTag);
+            kafkaOutputHitStream.print();
+            sinkHitResultToKafka(parameter,kafkaOutputHitStream);
 
             env.getConfig().setGlobalJobParameters(parameter);
             env.execute("eagle-log");
@@ -221,40 +263,41 @@ public class App {
                 sqlDbSrv => sqlAddr + ":" + sqlPort : dbSrvId
          */
         String sqlAddr = message.getSqladdr();
-        String sqlPort = message.getSqlport();
-        String dbSrvKey = sqlAddr + ":" + sqlPort;
-        Dbsrv dbsrv = new Dbsrv();
-        if (!jedis.sismember("sqlAddr", dbSrvKey)) {
-            jedis.sadd("sqlAddr", dbSrvKey);
-            Long dbSrvId = SnowIdUtils.uniqueLong();
-            dbsrv.setId(dbSrvId);
-            dbsrv.setIp(sqlAddr);
-            dbsrv.setPort(sqlPort);
-            dbsrv.setType(message.getSqlserver());
-            dbsrv.setTime(DateUtil.getCurrentDate());
-            sqlResult.setDbsrv(dbsrv);
+        if (sqlAddr!="" && sqlAddr != null) {
+            String sqlPort = message.getSqlport();
+            String dbSrvKey = sqlAddr + ":" + sqlPort;
+            Dbsrv dbsrv = new Dbsrv();
+            if (!jedis.sismember("sqlAddr", dbSrvKey)) {
+                jedis.sadd("sqlAddr", dbSrvKey);
+                Long dbSrvId = SnowIdUtils.uniqueLong();
+                dbsrv.setId(dbSrvId);
+                dbsrv.setIp(sqlAddr);
+                dbsrv.setPort(sqlPort);
+                dbsrv.setType(message.getSqlserver());
+                dbsrv.setTime(DateUtil.getCurrentDate());
+                sqlResult.setDbsrv(dbsrv);
 
-            jedis.hset("sqlDbSrv", dbSrvKey, String.valueOf(dbSrvId));
-        }
+                jedis.hset("sqlDbSrv", dbSrvKey, String.valueOf(dbSrvId));
+            }
 
         /*
             Db 增量入库
             HashSet
                 sqlDb => sqlDb : dbId
          */
-        String dbKey = message.getSqldb();
-        Db db = new Db();
-        if (!jedis.sismember("sqlDbSet", dbKey)) {
-            jedis.sadd("sqlDbSet", dbKey);
-            Long dbId = SnowIdUtils.uniqueLong();
-            db.setId(dbId);
-            String dbSrvId = jedis.hget("sqlDbSrv", dbSrvKey);
-            db.setDbsrvId(Long.valueOf(dbSrvId));
-            db.setName(dbKey);
-            sqlResult.setDb(db);
+            String dbKey = message.getSqldb();
+            Db db = new Db();
+            if (!jedis.sismember("sqlDbSet", dbKey)) {
+                jedis.sadd("sqlDbSet", dbKey);
+                Long dbId = SnowIdUtils.uniqueLong();
+                db.setId(dbId);
+                String dbSrvId = jedis.hget("sqlDbSrv", dbSrvKey);
+                db.setDbsrvId(Long.valueOf(dbSrvId));
+                db.setName(dbKey);
+                sqlResult.setDb(db);
 
-            jedis.hset("sqlDb", dbKey, String.valueOf(dbId));
-        }
+                jedis.hset("sqlDb", dbKey, String.valueOf(dbId));
+            }
 
         /*
             Account 增量入库
@@ -263,22 +306,22 @@ public class App {
                     如果仅去重sqlUser，那相同数据库user，但password不同的账户信息，展示在页面是password会为相同user的第一条的password
                         不显示password则按照username去重即可
          */
-        String sqlUserName = message.getSqluser();
-        String sqlPwd = message.getSqlpwd();
-        String accountKey = sqlUserName;
-        Account account = new Account();
-        if (!jedis.sismember("sqlAccountSet", accountKey)) {
-            jedis.sadd("sqlAccountSet", accountKey);
-            Long accountId = SnowIdUtils.uniqueLong();
-            account.setId(accountId);
-            String dbId = jedis.hget("sqlDb", dbKey);
-            account.setDbId(Long.valueOf(dbId));
-            account.setUsername(sqlUserName);
-            account.setPwd(sqlPwd);
-            sqlResult.setAccount(account);
+            String sqlUserName = message.getSqluser();
+            String sqlPwd = message.getSqlpwd();
+            String accountKey = sqlUserName;
+            Account account = new Account();
+            if (!jedis.sismember("sqlAccountSet", accountKey)) {
+                jedis.sadd("sqlAccountSet", accountKey);
+                Long accountId = SnowIdUtils.uniqueLong();
+                account.setId(accountId);
+                String dbId = jedis.hget("sqlDb", dbKey);
+                account.setDbId(Long.valueOf(dbId));
+                account.setUsername(sqlUserName);
+                account.setPwd(sqlPwd);
+                sqlResult.setAccount(account);
 
-            jedis.hset("sqlAccount", accountKey, String.valueOf(accountId));
-        }
+                jedis.hset("sqlAccount", accountKey, String.valueOf(accountId));
+            }
 
         /*
             Table 增量入库
@@ -286,20 +329,20 @@ public class App {
                 sqlTable => sqlTable : tableId
             具体还需根据到时候识别出来的Table格式修改table.setName输入数据
          */
-        String tableKey = message.getSqltable();
-        Table table = new Table();
-        if (!jedis.sismember("sqlTableSet", tableKey)) {
-            jedis.sadd("sqlTableSet", tableKey);
-            Long tableId = SnowIdUtils.uniqueLong();
-            table.setId(tableId);
-            String dbId = jedis.hget("sqlDb", dbKey);
-            table.setDbId(Long.valueOf(dbId));
-            table.setName(tableKey);
-            table.setTime(DateUtil.getCurrentDate());
-            sqlResult.setTable(table);
+            String tableKey = message.getSqltable();
+            Table table = new Table();
+            if (!jedis.sismember("sqlTableSet", tableKey)) {
+                jedis.sadd("sqlTableSet", tableKey);
+                Long tableId = SnowIdUtils.uniqueLong();
+                table.setId(tableId);
+                String dbId = jedis.hget("sqlDb", dbKey);
+                table.setDbId(Long.valueOf(dbId));
+                table.setName(tableKey);
+                table.setTime(DateUtil.getCurrentDate());
+                sqlResult.setTable(table);
 
-            jedis.hset("sqlTable", tableKey, String.valueOf(tableId));
-        }
+                jedis.hset("sqlTable", tableKey, String.valueOf(tableId));
+            }
 
         /*
             Sql全量入库
@@ -308,25 +351,29 @@ public class App {
                     如果需要sql相关的id就通过key去对应的HashSet内取
                         http相关的id在上方已经取出，直接使用即可
          */
-        Long apiTableId = SnowIdUtils.uniqueLong();
-        Long accountId = Long.valueOf(jedis.hget("sqlAccount", accountKey));
-        Long tableId = Long.valueOf(jedis.hget("sqlTable", tableKey));
+            Long apiTableId = SnowIdUtils.uniqueLong();
+            Long accountId = Long.valueOf(jedis.hget("sqlAccount", accountKey));
+            Long tableId = Long.valueOf(jedis.hget("sqlTable", tableKey));
 
-        ApiTable apiTable = new ApiTable();
-        apiTable.setId(apiTableId);
-        apiTable.setAccountId(accountId);
-        apiTable.setTableId(tableId);
-        apiTable.setApiId(apiId);
-        apiTable.setRequestId(clientApiId);
-        apiTable.setTime(DateUtil.getCurrentDate());
-        sqlResult.setApiTable(apiTable);
+            ApiTable apiTable = new ApiTable();
+            apiTable.setId(apiTableId);
+            apiTable.setAccountId(accountId);
+            apiTable.setTableId(tableId);
+            apiTable.setApiId(apiId);
+            apiTable.setRequestId(clientApiId);
+            apiTable.setTime(DateUtil.getCurrentDate());
+            sqlResult.setApiTable(apiTable);
+        }
 
         /*
             将所有需要持久化的信息存入map
          */
         Result result = new Result();
         result.setHttpResult(httpResult);
-        result.setSqlResult(sqlResult);
+        if (sqlResult!=null){
+            result.setSqlResult(sqlResult);
+        }
+        result.setMessage(message);
 
         return result;
     }
@@ -393,6 +440,22 @@ public class App {
         }
     }
 
+    private static SingleOutputStreamOperator<HitResult> processResultStream(ParameterTool parameter, DataStream<Result> dataSource,
+                                                                         BroadcastStream<RuleBase> ruleSource) throws Exception {
+        BroadcastConnectedStream<Result, RuleBase> connectedStreams = dataSource.connect(ruleSource);
+        int processParallelism = parameter.getInt(ConfigConstant.STREAM_PROCESS_PARALLELISM);
+        String kafkaIndex = parameter.get(ConfigConstant.KAFKA_SINK_INDEX);
+        RuleBase ruleBase = getInitRuleBase(parameter);
+        if (ruleBase == null) {
+            throw new Exception("Can not get initial rules");
+        } else {
+            String name = "process-log";
+            logger.debug("Initial rules: " + ruleBase.toString());
+            return connectedStreams.process(new ResultProcessFunction(ruleBase, kafkaIndex))
+                    .setParallelism(processParallelism).name(name).uid(name);
+        }
+    }
+
     private static RuleBase getInitRuleBase(ParameterTool parameter) {
         String ruleUrl = parameter.get(ConfigConstant.STREAM_RULE_URL);
         String content = HttpUtil.doGet(ruleUrl);
@@ -420,6 +483,17 @@ public class App {
         String name = "kafka-sink";
         FlinkKafkaProducer<ResultMap> producer = new FlinkKafkaProducer<>(kafkaBootstrapServers, kafkaTopic,
                 new LogSchema2());
+        producer.setLogFailuresOnly(false);
+        stream.addSink(producer).setParallelism(kafkaParallelism).name(name).uid(name);
+    }
+
+    private static void sinkHitResultToKafka(ParameterTool parameter, DataStream<HitResult> stream) {
+        String kafkaBootstrapServers = parameter.get(ConfigConstant.KAFKA_SINK_BOOTSTRAP_SERVERS);
+        String kafkaTopic = parameter.get(ConfigConstant.KAFKA_SINK_TOPIC);
+        int kafkaParallelism = parameter.getInt(ConfigConstant.KAFKA_SINK_TOPIC_PARALLELISM);
+        String name = "kafka-sink";
+        FlinkKafkaProducer<HitResult> producer = new FlinkKafkaProducer<>(kafkaBootstrapServers, kafkaTopic,
+                new HitResultSchema());
         producer.setLogFailuresOnly(false);
         stream.addSink(producer).setParallelism(kafkaParallelism).name(name).uid(name);
     }
