@@ -52,7 +52,7 @@ public class EagleProperties {
                     map.put(ConfigConstant.FLINK_MODE, ConfigConstant.MODE_TEST);
                     map.put(ConfigConstant.KAFKA_BOOTSTRAP_SERVERS, "112.124.65.22:9092");
                     map.put(ConfigConstant.KAFKA_GROUP_ID, "log-test");
-                    map.put(ConfigConstant.KAFKA_TOPIC, "eagle-log-test-1");
+                    map.put(ConfigConstant.KAFKA_TOPIC, "eagle-log-test-67");
                     map.put(ConfigConstant.KAFKA_TOPIC_PARALLELISM, "3");
 
                     map.put(ConfigConstant.KAFKA_SINK_INDEX, "log_alarm");
@@ -73,7 +73,7 @@ public class EagleProperties {
             map.put(ConfigConstant.REDIS_CLUSTER_HOSTS, "112.124.65.22:6371");
             map.put(ConfigConstant.REDIS_SINK_PARALLELISM, "2");
 
-            map.put(ConfigConstant.ELASTICSEARCH_HOSTS, "112.124.65.22:31920");
+            map.put(ConfigConstant.ELASTICSEARCH_HOSTS, "112.124.65.22:31922");
             map.put(ConfigConstant.ELASTICSEARCH_BULK_FLUSH_MAX_ACTIONS, "5000");
             map.put(ConfigConstant.ELASTICSEARCH_BULK_FLUSH_MAX_SIZE_MB, "50");
             map.put(ConfigConstant.ELASTICSEARCH_BULK_FLUSH_INTERVAL_MS, "1000");
